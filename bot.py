@@ -1,9 +1,3 @@
-
-"""
-Simple Bot to reply to Telegram messages taken from the python-telegram-bot examples.
-Source: https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/echobot2.py
-"""
-
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
@@ -13,7 +7,6 @@ import sys
 import ipywidgets as widgets
 import time
 import urllib.request
-
 
 
 def generate_text(text, net = 'yalm'):
@@ -48,29 +41,41 @@ class dialog():
     def __init__(self, net='ruGPT', initial='Диалог:\n', \
                     pre_user='Человек: «', post_user='»\n', \
                     pre_computer='Компьютер: «', post_computer='»\n', 
-                    endpoint='»'):
+                    endpoint='»', max_len = 1850):
         self.net = net
+        self.initial = initial
         self.text = initial
+        self.pre_user = pre_user
+        self.post_user = post_user
+        self.pre_computer = pre_computer
+        self.post_computer = post_computer
+        self.endpoint = endpoint
+        self.max_len = max_len
+
     def answer(self, text):
         self.text += f'{self.pre_user}{text}{self.post_user}{self.pre_computer}'
-        if len(text) > 1900:
-            text = text[-1900:]
+        if len(text) > self.max_len:
+            text = text[-self.max_len:]
         r = generate_text(self.text, self.net)
             
         if self.endpoint == '»':
             q = 1
             for i in range(len(r)):
                 if r[i] == '«':
-                q += 1
+                    q += 1
                 if r[i] == '»':
-                q -= 1
+                    q -= 1
                 if q == 0:
-                r = r[:i]
+                    r = r[:i]
                 break
         else:
             r = r.split(self.endpoint)[0]
+
         self.text += r + self.post_computer
         return r
+
+    def reset(self):
+        self.text = self.initial
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
