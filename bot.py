@@ -1,23 +1,30 @@
+from config import TOKEN, CHAT, NICKS
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import telegram
 import requests
 import json
 from random import choice
 import sys
-import ipywidgets as widgets
 import time
 import urllib.request
 
+global TXT
 
-def generate_text(text, net = 'yalm'):
-        if net is None:
-            net = self.net
+def generate_text(text, net):
         if net == 'rugpt':
             url = 'https://api.aicloud.sbercloud.ru/public/v1/public_inference/gpt3/predict'
             data = {"text": text}
-            r = requests.post(url, json=data)
+            r = requests.post(url, verify=True, json=data)
+
+            print('r\n', r)
+            print('r.json()\n', r.json())
             r = r.json()['predictions']
             r = r[len(text):]
+            print('len text\t', len(text))
+            print('len r\t', len(r))
+            print('len text+r\t', len(r) + len(text))
+            print('r final\n', r)
         if net == 'yalm':
             headers = {
                             'Content-Type': 'application/json',
@@ -31,14 +38,25 @@ def generate_text(text, net = 'yalm'):
             params = json.dumps(payload).encode('utf8')
             req = urllib.request.Request(url, data=params, headers=headers)
             response = urllib.request.urlopen(req)
+            print('response\n', response)
             r = response.read()
+            print('response.read()\n', r)
             r = r.decode('unicode_escape')
+            print('r.decode\n', r)
+            print(r)
             r = r.split('\"text\":\"')[1][:-2]
         return r
 
 
-class dialog():
-    def __init__(self, net='ruGPT', initial='Диалог:\n', \
+def generate_nickname(net):
+    init = NICKS
+    nick = generate_text(init, net)
+    nick = nick.split('\n')[0]
+    return nick
+
+
+class speaker():
+    def __init__(self, net='rugpt', initial='Диалог:\n', \
                     pre_user='Человек: «', post_user='»\n', \
                     pre_computer='Компьютер: «', post_computer='»\n', 
                     endpoint='»', max_len = 1850):
@@ -53,9 +71,14 @@ class dialog():
         self.max_len = max_len
 
     def answer(self, text):
-        self.text += f'{self.pre_user}{text}{self.post_user}{self.pre_computer}'
-        if len(text) > self.max_len:
-            text = text[-self.max_len:]
+        self.listen(text)
+        r = self.say()
+        return r
+
+    def say(self):
+        self.text += f'{self.pre_computer}'
+        if len(self.text) > self.max_len:
+            self.text = self.text[-self.max_len:]
         r = generate_text(self.text, self.net)
             
         if self.endpoint == '»':
@@ -67,68 +90,70 @@ class dialog():
                     q -= 1
                 if q == 0:
                     r = r[:i]
-                break
+                    break
         else:
             r = r.split(self.endpoint)[0]
+        if r.replace(' ', '') == '':
+            r = '(молчит)'
 
         self.text += r + self.post_computer
         return r
+        
+        
+    def listen(self, text):
+        self.text += f'{self.pre_user}{text}{self.post_user}'
 
     def reset(self):
         self.text = self.initial
-
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-
-logger = logging.getLogger(__name__)
-TOKEN = '2053623712:AAEXbNLC704BtLPps8Bh2TcHbkTncqX1Rxo'
-
-# Define a few command handlers. These usually take the two arguments update and
-# context. Error handlers also receive the raised TelegramError object in error.
-def start(update, context):
-    """Send a message when the command /start is issued."""
-    update.message.reply_text('Hi!')
-
-def help(update, context):
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
-
-def echo(update, context):
-    """Echo the user message."""
-    update.message.reply_text(update.message.text)
-
-def error(update, context):
-    """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+        
 
 def main():
-    """Start the bot."""
-    # Create the Updater and pass it your bot's token.
-    # Make sure to set use_context=True to use the new context based callbacks
-    # Post version 12 this will no longer be necessary
-    updater = Updater(TOKEN, use_context=True)
+    bot = telegram.Bot(token=TOKEN)
+    WAIT = 60*0.6
+    initial = """Беседа:
+Конфуций: «Вы что, не признаете правил хорошего тона?»
+Лао-Цзы: «Если вам хочется сесть, садитесь, если вам хочется стоять — стойте. Я не вправе указывать вам на то, что делать. Я не вмешиваюсь в чужую жизнь. Вы свободный человек, но и я — свободный человек.»
+Конфуций: «(потрясенный молчит)»
+Лао-Цзы: «Я никогда не видел что-либо «высшее» или «низшее». Человек есть человек, точно так же как деревья есть деревья. Все участвуют в одном и том же существовании. Нет никого, кто был бы выше или ниже. Все это бессмыслица!»
+Конфуций: «Что происходит с человеком после смерти?»
+Лао-Цзы: «Вы живете, но можете ли вы сказать, что такое жизнь?»
+Конфуций: «(смутился)»
+Лао-Цзы: «Вы не знаете этой жизни и вместо того, чтобы познавать ее, вы беспокоитесь о той, запредельной.»
+Беседа:
+Морфиус: «Ты веришь в судьбу, Нео?»
+Нео: «Нет.»
+Морфиус: «Почему?»
+Нео: «Неприятно думать, что тобой манипулируют.»
+Беседа:
+Диана: «Ты не становишься моложе, Марк. Мир меняется. Музыка меняется, даже наркотики меняются. Нельзя же сидеть целыми днями дома и мечтать о героине и Зигги Попе.»
+Марк: «Игги Поп.»
+Диана: «Без разницы. Все равно он уже умер.»
+Марк: «Игги Поп не умер, в прошлом году Томми ходил на его концерт.»
+Диана: «Ты должен найти для себя что-то новое.»
+Беседа:
+"""
+    rugptname = generate_nickname('rugpt')
+    yalmanme = generate_nickname('yalm')
 
-    # Get the dispatcher to register handlers
-    dp = updater.dispatcher
+    rugpt = speaker(net='rugpt', initial=initial, \
+                    pre_user=f'{yalmanme}: «', post_user='»\n', \
+                    pre_computer=f'{rugptname}: «', post_computer='»\n', 
+                    endpoint='»', max_len = 1333)
+    yalm = speaker(net='yalm', initial=initial, \
+                    pre_user=f'{rugptname}: «', post_user='»\n', \
+                    pre_computer=f'{yalmanme}: «', post_computer='»\n', 
+                    endpoint='»', max_len = 1333)
 
-    # on different commands - answer in Telegram
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
-
-    # on noncommand i.e message - echo the message on Telegram
-    dp.add_handler(MessageHandler(Filters.text, echo))
-
-    # log all errors
-    dp.add_error_handler(error)
-
-    # Start the Bot
-    updater.start_polling()
-
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
-    updater.idle()
+    r2 = rugpt.say()
+    while True:
+        status = bot.send_message(chat_id=CHAT, text=f'<b>{rugptname}:</b>\n{r2}', parse_mode=telegram.ParseMode.HTML)
+        # print(status)
+        time.sleep(WAIT)
+        r1 = yalm.answer(r2)
+        status = bot.send_message(chat_id=CHAT, text=f'<b>{yalmanme}:</b>\n{r1}', parse_mode=telegram.ParseMode.HTML)
+        # print(status)
+        time.sleep(WAIT)
+        r2 = rugpt.answer(r1)
 
 if __name__ == '__main__':
     main()
